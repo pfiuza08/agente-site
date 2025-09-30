@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat do Agente</title>
+  <style>
+    :root { --brand:#c44b04; --bg:#0f0f10; --card:#1a1a1b; --text:#f6f6f6; --muted:#b9b9b9; }
+    *{box-sizing:border-box}
+    body{margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji'; background:var(--bg); color:var(--text);}
+    header{max-width:900px; margin:24px auto 0; padding:0 16px;}
+    h1{font-size:22px; margin:0 0 6px}
+    .sub{color:var(--muted); font-size:14px}
+    .card{max-width:900px; margin:16px auto; background:var(--card); border:1px solid #2a2a2b; border-radius:16px; overflow:hidden}
+    #log{height:58vh; overflow:auto; padding:16px}
+    .row{display:flex; gap:8px; margin:10px 0; align-items:flex-end}
+    .bubble{max-width:78%; padding:12px 14px; border-radius:14px; white-space:pre-wrap; line-height:1.35}
+    .me{background:#252527; border:1px solid #303033; margin-left:auto; border-bottom-right-radius:4px}
+    .bot{background:#101012; border:1px solid #2a2a2b; border-bottom-left-radius:4px}
+    .from{font-size:12px; color:var(--muted); margin-bottom:6px}
+    form{display:flex; gap:8px; padding:12px; border-top:1px solid #2a2a2b; background:#121213}
+    textarea{flex:1; resize:vertical; min-height:48px; max-height:160px; padding:12px; border-radius:12px; border:1px solid #2a2a2b; background:#0f0f10; color:var(--text)}
+    button{background:var(--brand); color:white; border:none; padding:12px 16px; border-radius:12px; font-weight:600; cursor:pointer}
+    button:disabled{opacity:.6; cursor:not-allowed}
+    .foot{max-width:900px; margin:8px auto 24px; color:var(--muted); font-size:12px; padding:0 16px}
+    a{color:var(--brand)}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chat do Agente</h1>
+    <div class="sub">Converse com seu agente de IA direto no seu domínio. (Versão simples, sem streaming)</div>
+  </header>
+
+  <div class="card">
+    <div id="log"></div>
+    <form id="f">
+      <textarea id="t" placeholder="Digite sua mensagem..."></textarea>
+      <button id="send">Enviar</button>
+    </form>
+  </div>
+
+  <div class="foot">
+    Dica: personalize as instruções do agente no servidor (arquivo <code>api/chat.js</code>).
+  </div>
+
+<script>
+const log = document.getElementById('log');
+const f = document.getElementById('f');
+const t = document.getElementById('t');
+const sendBtn = document.getElementById('send');
+
+const messages = []; // manter histórico
+
+function add(role, content) {
+  const row = document.createElement('div');
+  row.className = 'row';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + (role === 'user' ? 'me' : 'bot');
+  bubble.textContent = content;
+
+  row.appendChild(bubble);
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+function thinking() {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.id = 'thinking';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble bot';
+  bubble.textContent = 'digitando…';
+  row.appendChild(bubble);
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+function stopThinking(text) {
+  const existing = document.getElementById('thinking');
+  if (existing) existing.remove();
+  if (text) add('assistant', text);
+}
+
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  const content = t.value.trim();
+  if (!content) return;
+  t.value = '';
+  add('user', content);
+  messages.push({ role: 'user', content });
+
+  sendBtn.disabled = true;
+  thinking();
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages })
+    });
+    const data = await r.json();
+    const reply = data.text || 'Sem resposta.';
+    messages.push({ role: 'assistant', content: reply });
+    stopThinking(reply);
+  } catch (err) {
+    stopThinking('Ops! Erro ao conectar ao servidor.');
+  } finally {
+    sendBtn.disabled = false;
+    t.focus();
+  }
+};
+
+// Enviar com Enter (Shift+Enter quebra linha)
+t.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    f.requestSubmit();
+  }
+});
+</script>
+</body>
+</html>
