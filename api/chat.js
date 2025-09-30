@@ -4,21 +4,30 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log("🔑 Checando API Key:", process.env.OPENAI_API_KEY ? "✅ Existe" : "❌ NÃO ENCONTRADA");
+
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: "OPENAI_API_KEY não configurada no projeto." });
     }
 
-    const body = await new Promise((resolve, reject) => {
-      let data = "";
-      req.on("data", chunk => data += chunk);
-      req.on("end", () => resolve(JSON.parse(data || "{}")));
-      req.on("error", reject);
-    });
+    let body = {};
+    try {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const raw = Buffer.concat(chunks).toString("utf8");
+      body = raw ? JSON.parse(raw) : {};
+    } catch (err) {
+      console.error("❌ Erro ao processar body:", err);
+      return res.status(400).json({ error: "Erro ao processar JSON do body." });
+    }
+
+    console.log("📩 Body recebido:", body);
 
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const system = process.env.AGENT_SYSTEM || "Você é um assistente útil e responde sempre em português do Brasil.";
+    const system = process.env.AGENT_SYSTEM || "Você é um assistente útil e responde sempre em português.";
 
     const input = [{ role: "system", content: system }, ...messages];
+    console.log("📨 Enviando para OpenAI:", input);
 
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -32,7 +41,10 @@ export default async function handler(req, res) {
       })
     });
 
+    console.log("📡 Status da resposta da OpenAI:", r.status);
+
     const data = await r.json();
+    console.log("📥 Dados recebidos:", data);
 
     if (!r.ok) {
       return res.status(500).json({ error: "Erro na chamada da OpenAI", details: data });
@@ -41,7 +53,7 @@ export default async function handler(req, res) {
     const text = data.output_text || "Sem resposta da OpenAI.";
     return res.status(200).json({ text });
   } catch (err) {
-    console.error("Erro no servidor:", err);
-    return res.status(500).json({ error: "Erro inesperado no servidor." });
+    console.error("💥 Erro inesperado no servidor:", err);
+    return res.status(500).json({ error: "Erro inesperado no servidor.", details: err.message });
   }
 }
