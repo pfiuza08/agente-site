@@ -1,16 +1,17 @@
 export default async function handler(req, res) {
+  // ✅ Permitir apenas POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   try {
+    // 🔑 Verificar se a chave da API existe
     console.log("🔑 Checando API Key:", process.env.OPENAI_API_KEY ? "✅ Existe" : "❌ NÃO ENCONTRADA");
-
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({ error: "OPENAI_API_KEY não configurada no projeto." });
     }
 
-    // 📩 Processa body da requisição
+    // 📩 Ler o body da requisição
     let body = {};
     try {
       const chunks = [];
@@ -24,13 +25,34 @@ export default async function handler(req, res) {
 
     console.log("📩 Body recebido:", body);
 
-    const messages = Array.isArray(body.messages) ? body.messages : [];
-    const system = process.env.AGENT_SYSTEM || "Você é um assistente útil e responde sempre em português.";
+    // 🧠 Tentar carregar o prompt do sistema
+    let system = process.env.AGENT_SYSTEM || "";
 
+    // ✅ Decodificar Base64, se existir
+    if (!system && process.env.AGENT_SYSTEM_B64) {
+      try {
+        system = Buffer.from(process.env.AGENT_SYSTEM_B64, "base64").toString("utf8");
+        console.log("✅ Prompt carregado via Base64");
+      } catch (e) {
+        console.error("❌ Erro ao decodificar AGENT_SYSTEM_B64:", e.message);
+      }
+    }
+
+    // 🛑 Fallback se nada for encontrado
+    if (!system || !system.trim()) {
+      system = "Você é um assistente útil e responde sempre em português.";
+      console.warn("⚠️ Nenhum prompt personalizado carregado. Usando fallback padrão.");
+    }
+
+    console.log("🧠 Prompt do sistema sendo usado:", system.slice(0, 120) + "...");
+
+    // 📦 Montar a conversa para envio à OpenAI
+    const messages = Array.isArray(body.messages) ? body.messages : [];
     const input = [{ role: "system", content: system }, ...messages];
+
     console.log("📨 Enviando para OpenAI:", input);
 
-    // 📡 Chamada para a API de Chat
+    // 📡 Requisição para a API da OpenAI
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -44,6 +66,7 @@ export default async function handler(req, res) {
     });
 
     console.log("📡 Status da resposta da OpenAI:", r.status);
+
     const data = await r.json();
     console.log("📥 Dados recebidos:", data);
 
@@ -63,4 +86,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Erro inesperado no servidor.", details: err.message });
   }
 }
+
+
 
