@@ -10,6 +10,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "OPENAI_API_KEY não configurada no projeto." });
     }
 
+    // 📩 Processa body da requisição
     let body = {};
     try {
       const chunks = [];
@@ -29,7 +30,8 @@ export default async function handler(req, res) {
     const input = [{ role: "system", content: system }, ...messages];
     console.log("📨 Enviando para OpenAI:", input);
 
-    const r = await fetch("https://api.openai.com/v1/responses", {
+    // 📡 Chamada para a API de Chat
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -37,12 +39,11 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        input
+        messages: input
       })
     });
 
     console.log("📡 Status da resposta da OpenAI:", r.status);
-
     const data = await r.json();
     console.log("📥 Dados recebidos:", data);
 
@@ -50,10 +51,16 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Erro na chamada da OpenAI", details: data });
     }
 
-    const text = data.output_text || "Sem resposta da OpenAI.";
+    // ✅ Extrair a resposta corretamente
+    const text =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      data?.choices?.[0]?.delta?.content?.trim() ||
+      "Sem resposta da OpenAI.";
+
     return res.status(200).json({ text });
   } catch (err) {
     console.error("💥 Erro inesperado no servidor:", err);
     return res.status(500).json({ error: "Erro inesperado no servidor.", details: err.message });
   }
 }
+
